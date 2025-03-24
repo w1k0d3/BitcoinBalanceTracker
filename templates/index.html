@@ -1,0 +1,254 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h2 class="h4 mb-0"><i class="fas fa-search me-2"></i>Bitcoin Private Key Balance Checker</h2>
+            </div>
+            <div class="card-body">
+                <p class="card-text">
+                    Upload a text file containing Bitcoin private keys (one per line) to check their balances.
+                    The tool supports various key formats including WIF and hex. The system will validate each key,
+                    check for balances using multiple cryptocurrency APIs, and save any keys with positive balances.
+                </p>
+                
+                <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" class="mt-4">
+                    <div class="mb-3">
+                        <label for="file" class="form-label"><i class="fas fa-file-upload me-2"></i>Select Private Keys File</label>
+                        <input type="file" class="form-control" id="file" name="file" required accept=".txt,.csv,.list,.dat,.text,.log,.asc,.tsv,.keys">
+                        <div class="form-text">Supported formats: txt, csv, list, dat, text, log, asc, tsv, keys (max size 4GB)</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="api_type" class="form-label"><i class="fas fa-server me-2"></i>API Selection Method</label>
+                                <select class="form-select" id="api_type" name="api_type">
+                                    {% for api in api_options %}
+                                    <option value="{{ api.value }}" {% if api.value == 'auto' %}selected{% endif %}>{{ api.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text api-description" id="api-description">
+                                    Automatically try all APIs in sequence until one works
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="delay" class="form-label"><i class="fas fa-clock me-2"></i>Delay Between Requests (seconds)</label>
+                                <input type="number" class="form-control" id="delay" name="delay" min="0.1" max="10" step="0.1" value="1.0">
+                                <div class="form-text">Lower values check faster but risk API rate limits</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="start_line" class="form-label"><i class="fas fa-step-forward me-2"></i>Start Line (0-indexed)</label>
+                                <input type="number" class="form-control" id="start_line" name="start_line" min="0" value="0">
+                                <div class="form-text">First line to process (0 = beginning of file)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="end_line" class="form-label"><i class="fas fa-step-backward me-2"></i>End Line (optional)</label>
+                                <input type="number" class="form-control" id="end_line" name="end_line" min="1">
+                                <div class="form-text">Last line to process (leave empty for end of file)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-play me-2"></i>Start Balance Check
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Running Jobs Section -->
+        {% if running_jobs %}
+        <div class="card mt-4 shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h3 class="h5 mb-0"><i class="fas fa-tasks me-2"></i>Running Jobs</h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>File</th>
+                                <th>Status</th>
+                                <th>Progress</th>
+                                <th>Found</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job_id, job in running_jobs.items() %}
+                            <tr>
+                                <td><small>{{ job_id[:8] }}...</small></td>
+                                <td>{{ job.filename }}</td>
+                                <td>
+                                    {% if job.status == 'running' %}
+                                    <span class="badge bg-success">Running</span>
+                                    {% elif job.status == 'completed' %}
+                                    <span class="badge bg-primary">Completed</span>
+                                    {% elif job.status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                    {% elif job.status == 'cancelled' %}
+                                    <span class="badge bg-warning">Cancelled</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar progress-bar-striped {% if job.status == 'running' %}progress-bar-animated{% endif %}" 
+                                             role="progressbar" 
+                                             style="width: {{ job.progress }}%;" 
+                                             aria-valuenow="{{ job.progress }}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                            {{ job.progress }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if job.found_keys > 0 %}
+                                    <span class="badge bg-success">{{ job.found_keys }} keys</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">0 keys</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('view_results', job_id=job_id) }}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if job.status == 'completed' %}
+                                    <a href="{{ url_for('download_results', job_id=job_id) }}" class="btn btn-sm btn-success">
+                                        <i class="fas fa-download"></i>
+                                    </a>
+                                    <a href="{{ url_for('clear_job', job_id=job_id) }}" class="btn btn-sm btn-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                    {% elif job.status == 'running' %}
+                                    <a href="{{ url_for('cancel_job', job_id=job_id) }}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-stop"></i>
+                                    </a>
+                                    {% else %}
+                                    <a href="{{ url_for('clear_job', job_id=job_id) }}" class="btn btn-sm btn-danger">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Features Section -->
+        <div class="card mt-4 shadow-sm">
+            <div class="card-header bg-secondary text-white">
+                <h3 class="h5 mb-0"><i class="fas fa-lightbulb me-2"></i>Features</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Multi-API Balance Checking</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Private Key Format Detection</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Real-time Progress Tracking</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Instant Balance Notification</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Line Range Processing</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>CSV Result Export</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Large File Support (up to 4GB)</span>
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <i class="fas fa-check-circle text-success me-3"></i>
+                                <span>Multi-Format Support (txt, csv, etc.)</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Supported APIs Section -->
+        <div class="card mt-4 shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h3 class="h5 mb-0"><i class="fas fa-plug me-2"></i>Supported APIs</h3>
+            </div>
+            <div class="card-body">
+                <p>This tool uses multiple Bitcoin blockchain APIs for balance checking, with automatic fallback:</p>
+                
+                <div class="row">
+                    {% for api in api_options %}
+                    {% if api.value not in ['auto', 'rotate'] %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100 bg-dark">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ api.name }}</h5>
+                                <p class="card-text small">{{ api.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const apiSelector = document.getElementById('api_type');
+    const apiDescription = document.getElementById('api-description');
+    
+    const apiDescriptions = {
+        {% for api in api_options %}
+        "{{ api.value }}": "{{ api.description }}",
+        {% endfor %}
+    };
+    
+    apiSelector.addEventListener('change', function() {
+        const selectedApi = this.value;
+        apiDescription.textContent = apiDescriptions[selectedApi] || '';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,335 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Job Results
+                </h2>
+                <div>
+                    <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-light">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Home
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h3 class="h5">Job Information</h3>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Job ID:</th>
+                                <td><code>{{ job.id }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td>
+                                    {% if job.status == 'running' %}
+                                    <span class="badge bg-success">Running</span>
+                                    {% elif job.status == 'completed' %}
+                                    <span class="badge bg-primary">Completed</span>
+                                    {% elif job.status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                    {% elif job.status == 'cancelled' %}
+                                    <span class="badge bg-warning">Cancelled</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>File:</th>
+                                <td>{{ job.filename }}</td>
+                            </tr>
+                            <tr>
+                                <th>API Type:</th>
+                                <td>{{ job.api_type }}</td>
+                            </tr>
+                            <tr>
+                                <th>Delay:</th>
+                                <td>{{ job.delay }}s</td>
+                            </tr>
+                            <tr>
+                                <th>Lines:</th>
+                                <td>{{ job.start_line }} to {{ job.end_line or 'End' }}</td>
+                            </tr>
+                            {% if job.status != 'running' and job.duration is defined %}
+                            <tr>
+                                <th>Duration:</th>
+                                <td>{{ job.duration|format_time }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h3 class="h5">Processing Statistics</h3>
+                        <div class="progress mb-3" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped {% if job.status == 'running' %}progress-bar-animated{% endif %}" 
+                                 role="progressbar" 
+                                 style="width: {{ job.progress }}%;" 
+                                 aria-valuenow="{{ job.progress }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ job.progress }}%
+                            </div>
+                        </div>
+                        
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <div class="card bg-dark mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ job.keys_processed }} / {{ job.total_keys }}</h5>
+                                        <p class="card-text small">Keys Processed</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-dark mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ job.found_keys|default(0) }}</h5>
+                                        <p class="card-text small">Keys With Balance</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-dark mb-3">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ "%.8f"|format(job.total_balance|default(0)) }}</h5>
+                                        <p class="card-text small">Total BTC</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {% if job.status == 'running' %}
+                        <div class="text-center mt-3">
+                            <a href="{{ url_for('cancel_job', job_id=job.id) }}" class="btn btn-warning">
+                                <i class="fas fa-stop me-2"></i>Cancel Job
+                            </a>
+                        </div>
+                        {% elif job.status == 'completed' %}
+                        <div class="text-center mt-3">
+                            <a href="{{ url_for('download_results', job_id=job.id) }}" class="btn btn-success">
+                                <i class="fas fa-download me-2"></i>Download Results
+                            </a>
+                            <a href="{{ url_for('clear_job', job_id=job.id) }}" class="btn btn-danger ms-2">
+                                <i class="fas fa-trash me-2"></i>Clear Job
+                            </a>
+                        </div>
+                        {% elif job.status == 'failed' or job.status == 'cancelled' %}
+                        <div class="text-center mt-3">
+                            <a href="{{ url_for('clear_job', job_id=job.id) }}" class="btn btn-danger">
+                                <i class="fas fa-trash me-2"></i>Clear Job
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Log Output -->
+                <div class="mt-4">
+                    <h3 class="h5 mb-3">Processing Log</h3>
+                    <div id="log-container" class="bg-dark p-3 rounded" style="height: 400px; overflow-y: auto; font-family: monospace;">
+                        {% for entry in job.log %}
+                        <div class="log-entry {% if entry.level == 'ERROR' %}text-danger{% elif entry.level == 'WARNING' %}text-warning{% elif entry.level == 'INFO' %}text-info{% else %}text-light{% endif %}">
+                            [{{ entry.time }}] {{ entry.level }}: {{ entry.message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Found Keys with Balances -->
+                {% if job.found_keys > 0 and job.found_key_details is defined %}
+                <div class="mt-4">
+                    <h3 class="h5 mb-3">Found Keys with Balances</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Private Key</th>
+                                    <th>Address</th>
+                                    <th>Balance (BTC)</th>
+                                    <th>API Used</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for key in job.found_key_details %}
+                                <tr>
+                                    <td><code>{{ key.private_key }}</code></td>
+                                    <td><code>{{ key.address }}</code></td>
+                                    <td>{{ "%.8f"|format(key.balance) }}</td>
+                                    <td>{{ key.api_used }}</td>
+                                    <td>{{ key.timestamp }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- API Statistics (if completed) -->
+                {% if job.status == 'completed' and job.found_keys > 0 and job.api_stats is defined %}
+                <div class="mt-4">
+                    <h3 class="h5 mb-3">API Statistics</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>API</th>
+                                    <th>Keys Found</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for api, count in job.api_stats.items() %}
+                                <tr>
+                                    <td>{{ api }}</td>
+                                    <td>{{ count }}</td>
+                                    <td>{{ (count / job.found_keys * 100)|round(1) }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Scroll log to bottom initially
+    const logContainer = document.getElementById('log-container');
+    if (logContainer) {
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    // Only update if job is running
+    {% if job.status == 'running' %}
+    function updateJobStatus() {
+        fetch('{{ url_for("get_job_status", job_id=job.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                // Update progress
+                document.querySelector('.progress-bar').style.width = data.progress + '%';
+                document.querySelector('.progress-bar').setAttribute('aria-valuenow', data.progress);
+                document.querySelector('.progress-bar').textContent = data.progress + '%';
+                
+                // Update counters
+                document.querySelectorAll('.card-title')[0].textContent = data.keys_processed + ' / ' + data.total_keys;
+                document.querySelectorAll('.card-title')[1].textContent = data.found_keys;
+                document.querySelectorAll('.card-title')[2].textContent = (data.total_balance || 0).toFixed(8);
+                
+                // Update log
+                const logContainer = document.getElementById('log-container');
+                logContainer.innerHTML = '';
+                
+                data.log.forEach(entry => {
+                    const logEntry = document.createElement('div');
+                    logEntry.className = 'log-entry';
+                    
+                    // Set color based on log level
+                    if (entry.level === 'ERROR') {
+                        logEntry.classList.add('text-danger');
+                    } else if (entry.level === 'WARNING') {
+                        logEntry.classList.add('text-warning');
+                    } else if (entry.level === 'INFO') {
+                        logEntry.classList.add('text-info');
+                    } else {
+                        logEntry.classList.add('text-light');
+                    }
+                    
+                    logEntry.textContent = `[${entry.time}] ${entry.level}: ${entry.message}`;
+                    logContainer.appendChild(logEntry);
+                });
+                
+                // Auto-scroll to bottom of log
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // Update found keys table if available
+                if (data.found_key_details && data.found_key_details.length > 0) {
+                    // Check if the table exists, if not, create it
+                    let foundKeysSection = document.querySelector('.found-keys-section');
+                    if (!foundKeysSection) {
+                        foundKeysSection = document.createElement('div');
+                        foundKeysSection.className = 'mt-4 found-keys-section';
+                        
+                        const heading = document.createElement('h3');
+                        heading.className = 'h5 mb-3';
+                        heading.textContent = 'Found Keys with Balances';
+                        foundKeysSection.appendChild(heading);
+                        
+                        const tableResponsive = document.createElement('div');
+                        tableResponsive.className = 'table-responsive';
+                        
+                        const table = document.createElement('table');
+                        table.className = 'table table-sm table-hover found-keys-table';
+                        
+                        const thead = document.createElement('thead');
+                        thead.innerHTML = `
+                            <tr>
+                                <th>Private Key</th>
+                                <th>Address</th>
+                                <th>Balance (BTC)</th>
+                                <th>API Used</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        `;
+                        
+                        const tbody = document.createElement('tbody');
+                        tbody.className = 'found-keys-tbody';
+                        
+                        table.appendChild(thead);
+                        table.appendChild(tbody);
+                        tableResponsive.appendChild(table);
+                        foundKeysSection.appendChild(tableResponsive);
+                        
+                        // Insert after log section
+                        const logSection = document.querySelector('#log-container').closest('.mt-4');
+                        logSection.parentNode.insertBefore(foundKeysSection, logSection.nextSibling);
+                    }
+                    
+                    // Update the table body with found keys
+                    const tbody = document.querySelector('.found-keys-tbody');
+                    tbody.innerHTML = '';
+                    
+                    data.found_key_details.forEach(key => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><code>${key.private_key}</code></td>
+                            <td><code>${key.address}</code></td>
+                            <td>${key.balance.toFixed(8)}</td>
+                            <td>${key.api_used}</td>
+                            <td>${key.timestamp}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+                
+                // Check if job status changed
+                if (data.status !== 'running') {
+                    // Reload page to show final status
+                    window.location.reload();
+                } else {
+                    // Continue polling
+                    setTimeout(updateJobStatus, 2000);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating job status:', error);
+                setTimeout(updateJobStatus, 5000);  // Try again in 5 seconds
+            });
+    }
+    
+    // Start polling for updates
+    setTimeout(updateJobStatus, 2000);
+    {% endif %}
+});
+</script>
+{% endblock %}
