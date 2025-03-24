@@ -32,8 +32,8 @@ A comprehensive tool for validating and checking balances of Bitcoin private key
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/btc-key-checker.git
-   cd btc-key-checker
+   git clone https://github.com/w1k0d3/BitcoinBalanceTracker.git
+   cd BitcoinBalanceTracker
    ```
 
 2. Install required dependencies:
