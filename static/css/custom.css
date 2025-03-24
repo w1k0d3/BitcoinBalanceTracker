@@ -1,0 +1,101 @@
+/* Custom styles for BTC Key Checker */
+
+/* General styles */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+footer {
+    margin-top: auto;
+}
+
+/* Card styles */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    border-bottom: none;
+    font-weight: 500;
+}
+
+/* Log container styles */
+#log-container {
+    background-color: #1a1a1a !important;
+    border: 1px solid #333;
+    border-radius: 0.25rem;
+}
+
+.log-entry {
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Progress bar enhancements */
+.progress {
+    background-color: #2a2a2a;
+    border-radius: 0.25rem;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Table styles */
+.table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.075);
+}
+
+/* Button styles */
+.btn {
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    font-weight: 500;
+}
+
+/* Form styles */
+.form-control, .form-select {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    color: #fff;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: #1a1a1a;
+    border-color: #80bdff;
+    color: #fff;
+}
+
+/* API selector styles */
+.api-description {
+    min-height: 3em;
+}
+
+/* Make monospace text more readable */
+code, pre, .log-entry {
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Improve readability of badges */
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 1rem;
+    }
+    
+    .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+    }
+}
